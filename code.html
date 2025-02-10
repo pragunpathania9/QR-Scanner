@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Scanner</title>
+    <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        #scanner {
+            width: 100%;
+            height: 300px;
+            margin: 20px 0;
+        }
+        #scannedData {
+            margin-top: 20px;
+        }
+        .item {
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #f2f2f2;
+            border-radius: 5px;
+        }
+        #clearButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #ff6347;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>QR Code Scanner</h1>
+    <p>Scan a QR code to assign it to a bin or store the info.</p>
+    
+    <div id="scanner"></div>
+    <p id="status"></p>
+
+    <div id="scannedData">
+        <h3>Scanned Items</h3>
+        <div id="itemsList"></div>
+    </div>
+
+    <button id="clearButton">Clear Scanned Items</button>
+
+    <script>
+        function onScanSuccess(decodedText, decodedResult) {
+            document.getElementById("status").innerText = `QR Code Detected: ${decodedText}`;
+            let scannedItems = JSON.parse(localStorage.getItem("scannedItems")) || [];
+            if (scannedItems.includes(decodedText)) {
+                alert("This item has already been scanned!");
+            } else {
+                const binNumber = prompt("Enter Bin Number for " + decodedText);
+                if (binNumber) {
+                    scannedItems.push(decodedText);
+                    localStorage.setItem("scannedItems", JSON.stringify(scannedItems));
+                    // Send the scan data to the Python backend
+                    fetch('/scan', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ qr_data: decodedText, bin_number: binNumber })
+                    }).then(response => response.json())
+                      .then(data => {
+                          alert(data.message);
+                          displayScannedItems(scannedItems);
+                      });
+                }
+            }
+        }
+
+        function displayScannedItems(scannedItems) {
+            const itemsList = document.getElementById("itemsList");
+            itemsList.innerHTML = '';  
+            scannedItems.forEach(item => {
+                const div = document.createElement("div");
+                div.className = "item";
+                div.textContent = `Item: ${item}`;
+                itemsList.appendChild(div);
+            });
+        }
+
+        function onScanFailure(error) {
+            console.warn(`QR Scan Error: ${error}`);
+        }
+
+        function startScanner() {
+            const qrCodeScanner = new Html5QrcodeScanner(
+                "scanner", { fps: 10, qrbox: 250 });
+            qrCodeScanner.render(onScanSuccess, onScanFailure);
+        }
+
+        function clearScannedItems() {
+            localStorage.removeItem("scannedItems");
+            displayScannedItems([]);
+        }
+
+        window.onload = function () {
+            startScanner();
+            const scannedItems = JSON.parse(localStorage.getItem("scannedItems")) || [];
+            displayScannedItems(scannedItems);
+            document.getElementById("clearButton").addEventListener("click", clearScannedItems);
+        };
+    </script>
+
+</body>
+</html>
